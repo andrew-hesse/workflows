@@ -51,5 +51,10 @@ jobs:
         with:
           advanced-security: false
           annotations: true
+          # Set explicitly rather than inherited. The action defaults this to
+          # true, and the online audits are what catch ref-version-mismatch, so
+          # the gate's strength would otherwise depend on an upstream default
+          # that could change without us noticing.
+          online-audits: true
           persona: ${{ inputs.persona }}
           min-severity: ${{ inputs.min-severity }}
