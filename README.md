@@ -12,7 +12,7 @@ consumption mechanism:
 
 | Repo | Holds | Consumed as |
 | --- | --- | --- |
-| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@v1` |
+| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@<commit> # v1` |
 | `andrew-hesse/biome-config` | shared Biome config | `github:andrew-hesse/biome-config#<tag>` in `package.json` |
 | `andrew-hesse/renovate` | shared Renovate preset | `github>andrew-hesse/renovate` in `renovate.json` |
 
@@ -32,14 +32,34 @@ injection, over-broad permissions, unpinned actions.
 ```yaml
 jobs:
   workflow-lint:
-    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@v1
+    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@0543eb81752c94e8840b7e43484edd20940b35a0 # v1
 ```
+
+Pin the **commit**, with the tag as a trailing comment. A bare `@v1` fails
+zizmor's own `unpinned-uses` audit, so the linter rejects the line that calls it.
+Resolve the commit an annotated tag points at with
+`git ls-remote <url> 'refs/tags/v1^{}'`; the tag object's own hash is not it.
 
 Inputs: `persona` (`regular`, `pedantic`, `auditor`), `min-severity`.
 
 It runs in annotation mode, not SARIF. The action defaults to uploading SARIF to
 the security tab, which requires GitHub Advanced Security and therefore fails on
 a private repo.
+
+### Reproducing the gate locally
+
+The action runs zizmor's **online** audits by default, so an offline local run is
+weaker than CI and will pass code that CI rejects. On one repo this was the
+difference between 0 findings and 18. Always include the token:
+
+```sh
+GH_TOKEN=$(gh auth token) uvx zizmor --min-severity low .
+```
+
+The online-only audit that matters most is `ref-version-mismatch`: a SHA whose
+trailing comment names a tag the SHA does not actually point at (for example
+`actions/checkout@9c091bb…` commented `# v7` when that commit is `v7.0.0`). Fix
+the comment; never bump the SHA to match the comment.
 
 ### `docker-publish.yml`
 
@@ -52,7 +72,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@v1
+    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@0543eb81752c94e8840b7e43484edd20940b35a0 # v1
     with:
       image-name: andrew-hesse/my-app
       title: my-app
@@ -82,7 +102,22 @@ and the `concurrency` group is what stops two merges racing to publish `:latest`
 
 ## Versioning
 
-Callers pin `@v1`. The `v1` tag moves as these workflows change, so a fix reaches
-every repo without touching each one. Breaking changes get a new major tag.
+Callers pin a **commit**, with the tag name as a trailing comment. That is
+immutable, and it is what zizmor's `unpinned-uses` audit requires.
+
+The trade-off is deliberate: a fix here does **not** reach callers by itself, and
+the `v1` tag must **not** be moved onto a later commit. Moving it would make every
+caller's `# v1` comment name a tag its pinned commit no longer belongs to, which
+is exactly what zizmor's `ref-version-mismatch` audit fails on.
+
+So releases work like any other dependency:
+
+1. Change a workflow here, merge it.
+2. Tag the new commit (`v2`, or `v1.1` for a compatible change).
+3. Renovate raises the pin bump in each consuming repo, since it manages the
+   `github-actions` datasource and updates SHA pins with their comments.
+
+Callers therefore stay on a known-good commit until a bump is reviewed, rather
+than silently inheriting whatever `v1` points at today.
 
 [zizmor]: https://docs.zizmor.sh/
