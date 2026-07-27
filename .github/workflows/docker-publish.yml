@@ -1,0 +1,122 @@
+name: Docker publish
+
+# Reusable: build a container image with buildx and push it to GHCR.
+#
+# Call it from a repo with:
+#
+#   jobs:
+#     build:
+#       permissions:
+#         contents: read
+#         packages: write     # REQUIRED here, not in this file: a reusable
+#                             # workflow can only narrow the caller's token,
+#                             # never widen it.
+#       uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@v1
+#       with:
+#         image-name: andrew-hesse/my-app
+#         title: my-app
+#         description: What the image is
+#
+# The caller keeps its own `on:` triggers, `paths:` filter and `concurrency`
+# group, because those are per-repo decisions.
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Image path under the registry, e.g. andrew-hesse/my-app."
+        required: true
+        type: string
+      title:
+        description: "org.opencontainers.image.title label."
+        required: true
+        type: string
+      description:
+        description: "org.opencontainers.image.description label."
+        required: true
+        type: string
+      platforms:
+        description: "Build platforms. amd64 only by default: the consumer is an x86 Synology."
+        required: false
+        type: string
+        default: linux/amd64
+      context:
+        description: "Docker build context."
+        required: false
+        type: string
+        default: .
+      push:
+        description: "Push the image. Set false on PRs to validate the Dockerfile without publishing."
+        required: false
+        type: boolean
+        default: true
+      timeout-minutes:
+        description: "Job timeout. A hung build otherwise runs to GitHub's 6 hour default."
+        required: false
+        type: number
+        default: 30
+
+permissions: {}
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    name: Build and push
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The build never pushes commits, so keep the job token out of
+          # .git/config where later steps could read it.
+          persist-credentials: false
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Login to GHCR
+        if: inputs.push
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ inputs.image-name }}
+          labels: |
+            org.opencontainers.image.title=${{ inputs.title }}
+            org.opencontainers.image.description=${{ inputs.description }}
+            org.opencontainers.image.vendor=Peculiar Cloud
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=main,enable={{is_default_branch}}
+            type=sha,format=short
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: ${{ inputs.context }}
+          push: ${{ inputs.push }}
+          platforms: ${{ inputs.platforms }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Layer cache is the only Docker caching that survives an ephemeral
+          # runner: `RUN --mount=type=cache` mounts are NOT exported by cache-to
+          # (docker/build-push-action#1011).
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Attestations require a public repo or GitHub Advanced Security; on a
+          # private repo they fail at the signing step. They would also add an
+          # index-level manifest, complicating watchtower's :latest digest check.
+          provenance: false
+          sbom: false

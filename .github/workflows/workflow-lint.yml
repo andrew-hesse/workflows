@@ -1,0 +1,55 @@
+name: Workflow lint
+
+# Reusable: audits this repo's own GitHub Actions workflows with zizmor.
+#
+# Call it from a repo with:
+#
+#   jobs:
+#     workflow-lint:
+#       uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@v1
+#
+# Reusable workflows must live directly in .github/workflows/ of this repo;
+# GitHub does not support subdirectories there.
+
+on:
+  workflow_call:
+    inputs:
+      persona:
+        description: "zizmor auditing persona: regular, pedantic, or auditor."
+        required: false
+        type: string
+        default: regular
+      min-severity:
+        description: "Lowest severity that is reported: informational, low, medium, high."
+        required: false
+        type: string
+        default: low
+
+# Nothing here writes anything; the job grants its own read scope.
+permissions: {}
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Without this, the job token stays in .git/config where any later
+          # step can read it. Nothing here pushes, so drop it.
+          persist-credentials: false
+
+      # advanced-security: false is required. The action defaults to uploading
+      # SARIF to the security tab, which needs GitHub Advanced Security and so
+      # fails on a private repo. Annotations need only `contents: read`, and are
+      # mutually exclusive with the SARIF path.
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+        with:
+          advanced-security: false
+          annotations: true
+          persona: ${{ inputs.persona }}
+          min-severity: ${{ inputs.min-severity }}

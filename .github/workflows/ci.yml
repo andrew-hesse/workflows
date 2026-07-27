@@ -1,0 +1,19 @@
+name: CI
+
+# This repo ships the workflow linter, so it audits itself with it.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-lint:
+    uses: ./.github/workflows/workflow-lint.yml
