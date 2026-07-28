@@ -89,6 +89,37 @@ The caller keeps its own `on:` triggers, `paths:` filter and `concurrency` group
 Those are per-repo decisions: the `paths:` filter depends on the repo's layout,
 and the `concurrency` group is what stops two merges racing to publish `:latest`.
 
+### `node-ci.yml`
+
+The standard pnpm PR gate: install, then lint, typecheck, test and build.
+
+```yaml
+jobs:
+  ci:
+    permissions:
+      contents: read
+    uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@<commit> # v3.2
+    with:
+      node-version-file: package.json
+```
+
+This needs no input per script only because the script vocabulary is
+standardised (see `CI.md` in `ahesse/docs`): `lint`, `typecheck`, `test` and
+`build` mean the same thing in every repo.
+
+Inputs: `node-version`, `node-version-file`, `test-script` (default `test`),
+`run-build`, `timeout-minutes`, `npm-token-op-ref`.
+
+Point `test-script` at a stricter script where the repo has one. A repo whose
+gate was a coverage run with enforced floors would otherwise have to re-run its
+whole suite in a second job to keep that floor, since a gate may get stronger
+but never weaker.
+
+A repo needing setup the vocabulary cannot express (a system binary, a service
+container) keeps its own `ci.yml`. It does **not** pass a shell command in as an
+input: injecting `run:` content through an input is the template-injection shape
+the linter flags.
+
 ### `e2e.yml`
 
 The Playwright suite: install, install browsers, run one script, upload the

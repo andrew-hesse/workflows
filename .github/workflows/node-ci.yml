@@ -33,6 +33,16 @@ on:
         required: false
         type: string
         default: ''
+      test-script:
+        description: >-
+          package.json script that runs the suite. Point it at a stricter script
+          where the repo has one, typically a coverage run with enforced floors:
+          a repo whose own gate was stricter than `pnpm test` would otherwise
+          have to re-run the suite in a second job to keep that floor, and a
+          gate may get stronger, never weaker.
+        required: false
+        type: string
+        default: test
       run-build:
         description: "Run `pnpm build`. Off for repos with no build step."
         required: false
@@ -122,8 +132,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The input reaches the shell as an environment variable, never
+      # interpolated into the script body: a ${{ }} expansion inside `run:` is
+      # the template injection shape zizmor flags.
       - name: Test
-        run: pnpm test
+        env:
+          TEST_SCRIPT: ${{ inputs.test-script }}
+        run: pnpm run "$TEST_SCRIPT"
 
       - name: Build
         if: inputs.run-build
