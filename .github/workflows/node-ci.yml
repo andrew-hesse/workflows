@@ -43,6 +43,19 @@ on:
         required: false
         type: number
         default: 10
+      npm-token-op-ref:
+        description: >-
+          op:// reference to a read:packages token, for repos installing private
+          @andrew-hesse packages from npm.pkg.github.com, which serves no
+          anonymous reads. Leave empty when every dependency is public.
+          Requires the OP_SERVICE_ACCOUNT_TOKEN secret.
+        required: false
+        type: string
+        default: ''
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN:
+        description: "Only needed when npm-token-op-ref is set."
+        required: false
 
 permissions: {}
 
@@ -79,6 +92,26 @@ jobs:
         with:
           node-version-file: ${{ inputs.node-version-file }}
           cache: 'pnpm'
+
+      # op is not preinstalled on GitHub-hosted runners, and the install is per
+      # job, so it has to happen here rather than in the caller.
+      - name: Setup 1Password CLI
+        if: inputs.npm-token-op-ref != ''
+        uses: 1password/install-cli-action@1a3160d5e9de1ae0803eaa08a88746f5ae3daa50 # v4.1.0
+
+      # The token goes in a user-level npmrc: pnpm refuses to expand credentials
+      # read from a committed project .npmrc and fails later with a misleading
+      # 401. The op:// ref travels via env, never interpolated into the shell.
+      - name: Authenticate to GitHub Packages
+        if: inputs.npm-token-op-ref != ''
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          NPM_TOKEN_OP_REF: ${{ inputs.npm-token-op-ref }}
+        run: |
+          umask 077
+          printf '//npm.pkg.github.com/:_authToken=%s\n' \
+            "$(op read "$NPM_TOKEN_OP_REF")" > "$RUNNER_TEMP/npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npmrc" >> "$GITHUB_ENV"
 
       - name: Install
         run: pnpm install --frozen-lockfile
