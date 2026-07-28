@@ -16,25 +16,24 @@ name: E2E
 # repo needing a database migration or a `wrangler dev` before its tests puts
 # that in the `webServer.command`, not here.
 #
-# Runs on a plain ubuntu-latest runner rather than the
-# mcr.microsoft.com/playwright container. The container exists to skip the
-# browser install, which mattered on a shared self-hosted runner where that
-# install took ~20 minutes; on a GitHub-hosted VM it is well under a minute.
-# Dropping the container removes three real problems it brought with it:
+# Runs on a plain ubuntu-latest runner, not the mcr.microsoft.com/playwright
+# container. What the container buys is a preinstalled browser set, and on a
+# GitHub-hosted VM that install takes under a minute. It costs three things in
+# exchange:
 #
-#   1. The image bakes its own Node, so a repo on a newer engines.node had to
-#      layer setup-node on top of it anyway.
-#   2. The image tag duplicates the @playwright/test version, and a mismatch
-#      makes Playwright re-download browsers at run time. Installing from the
-#      package instead leaves exactly one source of truth: package.json.
-#   3. Container filesystems are overlayfs, whose slow file locking made
-#      wrangler's local D1 (SQLite) lose a startup race and die with
-#      SQLITE_BUSY, needing a tmpfs symlink to work around.
+#   1. It bakes its own Node, so a repo on a different engines.node has to layer
+#      setup-node on top of it regardless.
+#   2. Its tag duplicates the @playwright/test version and can drift from it; a
+#      mismatch makes Playwright re-download browsers at run time. Installing
+#      from the package leaves one source of truth: package.json.
+#   3. Its filesystem is overlayfs, whose file locking is slow enough that
+#      wrangler's local D1 (SQLite) loses a startup race and fails with
+#      SQLITE_BUSY unless that state is moved onto a tmpfs path.
 #
-# Browsers are deliberately not cached. The cache key would have to track the
-# resolved Playwright version exactly, and a stale entry produces a confusing
-# version-mismatch failure rather than a clean miss; `--with-deps` still has to
-# run for the OS packages regardless, so the saving is seconds.
+# Browsers are deliberately not cached. The cache key has to track the resolved
+# Playwright version exactly, a stale entry gives a confusing version-mismatch
+# failure rather than a clean miss, and `--with-deps` still installs the OS
+# packages either way, so the saving is seconds.
 
 on:
   workflow_call:

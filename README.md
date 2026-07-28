@@ -114,16 +114,17 @@ empty string for all), `test-script` (default `test:e2e`), `timeout-minutes`,
 `artifact-name`, `retention-days`, `npm-token-op-ref`.
 
 It runs on `ubuntu-latest`, **not** in the `mcr.microsoft.com/playwright`
-container. The container's purpose is skipping the browser install, which is
-under a minute on a GitHub-hosted VM. Avoiding it also avoids the container's own
-costs: the image bakes its own Node (so a newer `engines.node` needs `setup-node`
-layered on anyway), its tag duplicates the `@playwright/test` version, and its
-overlayfs is slow enough at file locking to make wrangler's local D1 lose a
-startup race and fail with `SQLITE_BUSY`.
+container. What the container buys is a preinstalled browser set, and that
+install takes under a minute on a GitHub-hosted VM. What it costs: the image
+bakes its own Node, so a repo on a different `engines.node` layers `setup-node`
+on top regardless; its tag duplicates the `@playwright/test` version and can
+drift from it, and a mismatch makes Playwright re-download browsers at run time;
+and its overlayfs file locking is slow enough that wrangler's local D1 loses a
+startup race and fails with `SQLITE_BUSY` unless that state sits on tmpfs.
 
-Browsers are not cached: the key must track the resolved Playwright version
-exactly or produce a confusing mismatch instead of a clean miss, and `--with-deps`
-still has to install the OS packages either way.
+Browsers are not cached: the key has to track the resolved Playwright version
+exactly, a stale entry gives a confusing mismatch rather than a clean miss, and
+`--with-deps` installs the OS packages either way.
 
 ## Conventions these encode
 
