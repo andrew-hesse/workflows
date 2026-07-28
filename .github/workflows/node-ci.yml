@@ -1,0 +1,79 @@
+name: Node CI
+
+# Reusable: the standard pnpm PR gate. Runs the same four scripts the pre-push
+# hook runs, so a clean push means a green PR.
+#
+#   jobs:
+#     ci:
+#       uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@<commit> # v2
+#
+# This only works because the script vocabulary is standardised (see CI.md in
+# ahesse/docs): every repo exposes lint, typecheck, test and build meaning the
+# same thing. Without that this would need an input per script name, and the
+# caller would be as long as the workflow it replaced.
+#
+# A repo needing extra setup (a system binary, a private registry credential)
+# keeps its own ci.yml rather than passing a shell command in as an input:
+# injecting `run:` content through an input is the template-injection shape the
+# workflow linter flags.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node major to test against. Match the repo's engines.node."
+        required: false
+        type: string
+        default: '24'
+      run-build:
+        description: "Run `pnpm build`. Off for repos with no build step."
+        required: false
+        type: boolean
+        default: true
+      timeout-minutes:
+        description: "Job timeout. A hung job otherwise runs to GitHub's 6 hour default."
+        required: false
+        type: number
+        default: 10
+
+permissions: {}
+
+jobs:
+  ci:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Nothing here pushes, so keep the job token out of .git/config where
+          # any later step could read it.
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        if: inputs.run-build
+        run: pnpm build
