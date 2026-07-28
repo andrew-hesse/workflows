@@ -16,4 +16,10 @@ concurrency:
 
 jobs:
   workflow-lint:
+    # A job calling a reusable workflow must grant its own permissions. A
+    # reusable workflow can only narrow the caller's token, never widen it, so
+    # with the workflow-level `permissions: {}` above and no grant here the run
+    # ends in startup_failure before any step executes.
+    permissions:
+      contents: read
     uses: ./.github/workflows/workflow-lint.yml

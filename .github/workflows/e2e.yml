@@ -1,0 +1,187 @@
+name: E2E
+
+# Reusable: the standard Playwright end-to-end gate.
+#
+#   jobs:
+#     e2e:
+#       permissions:
+#         contents: read
+#       uses: andrew-hesse/workflows/.github/workflows/e2e.yml@<commit> # v3.1
+#       with:
+#         node-version-file: package.json
+#
+# The caller's playwright.config.ts owns everything about *how* the suite runs:
+# the projects, the reporters, and the `webServer` block that builds and serves
+# the app. This workflow only prepares an environment and runs one script, so a
+# repo needing a database migration or a `wrangler dev` before its tests puts
+# that in the `webServer.command`, not here.
+#
+# Runs on a plain ubuntu-latest runner, not the mcr.microsoft.com/playwright
+# container. What the container buys is a preinstalled browser set, and on a
+# GitHub-hosted VM that install takes under a minute. It costs three things in
+# exchange:
+#
+#   1. It bakes its own Node, so a repo on a different engines.node has to layer
+#      setup-node on top of it regardless.
+#   2. Its tag duplicates the @playwright/test version and can drift from it; a
+#      mismatch makes Playwright re-download browsers at run time. Installing
+#      from the package leaves one source of truth: package.json.
+#   3. Its filesystem is overlayfs, whose file locking is slow enough that
+#      wrangler's local D1 (SQLite) loses a startup race and fails with
+#      SQLITE_BUSY unless that state is moved onto a tmpfs path.
+#
+# Browsers are deliberately not cached. The cache key has to track the resolved
+# Playwright version exactly, a stale entry gives a confusing version-mismatch
+# failure rather than a clean miss, and `--with-deps` still installs the OS
+# packages either way, so the saving is seconds.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node major to run against. Match the repo's engines.node. Ignored if node-version-file is set."
+        required: false
+        type: string
+        default: '24'
+      node-version-file:
+        description: >-
+          Path to a file holding the Node version (package.json, .nvmrc).
+          Takes precedence over node-version, so a repo that pins the version in
+          a file keeps one source of truth instead of restating it here.
+        required: false
+        type: string
+        default: ''
+      browsers:
+        description: >-
+          Space-separated Playwright browsers to install. Defaults to chromium
+          alone, which is all a Chromium-only project (including the Desktop
+          Chrome and Pixel device presets) needs; installing the other two
+          engines is pure wall-clock. Set to an empty string to install all.
+        required: false
+        type: string
+        default: chromium
+      test-script:
+        description: "package.json script that runs the suite."
+        required: false
+        type: string
+        default: test:e2e
+      timeout-minutes:
+        description: "Job timeout. A hung browser otherwise runs to GitHub's 6 hour default."
+        required: false
+        type: number
+        default: 20
+      artifact-name:
+        description: "Name of the uploaded report artifact. Override when one repo calls this more than once."
+        required: false
+        type: string
+        default: playwright-report
+      retention-days:
+        description: "How long to keep the report. Traces and videos are large, and stale ones are rarely read."
+        required: false
+        type: number
+        default: 7
+      npm-token-op-ref:
+        description: >-
+          op:// reference to a read:packages token, for repos installing private
+          @andrew-hesse packages from npm.pkg.github.com, which serves no
+          anonymous reads. Leave empty when every dependency is public.
+          Requires the OP_SERVICE_ACCOUNT_TOKEN secret.
+        required: false
+        type: string
+        default: ''
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN:
+        description: "Only needed when npm-token-op-ref is set."
+        required: false
+
+permissions: {}
+
+jobs:
+  e2e:
+    name: Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Nothing here pushes, so keep the job token out of .git/config where
+          # any later step could read it.
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      # Two steps rather than one, because setup-node lets node-version win when
+      # both are supplied: passing them together would silently ignore the file.
+      - name: Setup Node.js
+        if: inputs.node-version-file == ''
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'pnpm'
+
+      - name: Setup Node.js (from file)
+        if: inputs.node-version-file != ''
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: 'pnpm'
+
+      # op is not preinstalled on GitHub-hosted runners, and the install is per
+      # job, so it has to happen here rather than in the caller.
+      - name: Setup 1Password CLI
+        if: inputs.npm-token-op-ref != ''
+        uses: 1password/install-cli-action@1a3160d5e9de1ae0803eaa08a88746f5ae3daa50 # v4.1.0
+
+      # The token goes in a user-level npmrc: pnpm refuses to expand credentials
+      # read from a committed project .npmrc and fails later with a misleading
+      # 401. The op:// ref travels via env, never interpolated into the shell.
+      - name: Authenticate to GitHub Packages
+        if: inputs.npm-token-op-ref != ''
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          NPM_TOKEN_OP_REF: ${{ inputs.npm-token-op-ref }}
+        run: |
+          umask 077
+          printf '//npm.pkg.github.com/:_authToken=%s\n' \
+            "$(op read "$NPM_TOKEN_OP_REF")" > "$RUNNER_TEMP/npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npmrc" >> "$GITHUB_ENV"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Inputs reach the shell as environment variables, never interpolated into
+      # the script body: a ${{ }} expansion inside `run:` is the template
+      # injection shape zizmor flags.
+      - name: Install Playwright browsers
+        env:
+          BROWSERS: ${{ inputs.browsers }}
+          # Playwright resolves the browser build from the installed package, so
+          # this cannot drift from the version the tests import.
+        run: |
+          read -ra targets <<< "$BROWSERS"
+          pnpm exec playwright install --with-deps "${targets[@]}"
+
+      - name: Run Playwright tests
+        env:
+          TEST_SCRIPT: ${{ inputs.test-script }}
+          CI: 'true'
+        run: pnpm run "$TEST_SCRIPT"
+
+      # !cancelled() rather than failure(): a green run's report still carries
+      # timings and flake retries worth reading. Which directories exist depends
+      # on the caller's configured reporters, so missing ones are not an error.
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: |
+            playwright-report/
+            blob-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: ${{ inputs.retention-days }}

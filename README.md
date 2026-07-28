@@ -89,6 +89,43 @@ The caller keeps its own `on:` triggers, `paths:` filter and `concurrency` group
 Those are per-repo decisions: the `paths:` filter depends on the repo's layout,
 and the `concurrency` group is what stops two merges racing to publish `:latest`.
 
+### `e2e.yml`
+
+The Playwright suite: install, install browsers, run one script, upload the
+report.
+
+```yaml
+jobs:
+  e2e:
+    permissions:
+      contents: read
+    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@<commit> # v3.1
+    with:
+      node-version-file: package.json
+```
+
+The caller's `playwright.config.ts` owns how the suite runs. In particular its
+`webServer.command` is where an app that needs building, migrating or serving
+before the tests does that work, so a repo whose e2e needs `wrangler dev` and a
+D1 migration pass needs no extra inputs here.
+
+Inputs: `node-version`, `node-version-file`, `browsers` (default `chromium`,
+empty string for all), `test-script` (default `test:e2e`), `timeout-minutes`,
+`artifact-name`, `retention-days`, `npm-token-op-ref`.
+
+It runs on `ubuntu-latest`, **not** in the `mcr.microsoft.com/playwright`
+container. What the container buys is a preinstalled browser set, and that
+install takes under a minute on a GitHub-hosted VM. What it costs: the image
+bakes its own Node, so a repo on a different `engines.node` layers `setup-node`
+on top regardless; its tag duplicates the `@playwright/test` version and can
+drift from it, and a mismatch makes Playwright re-download browsers at run time;
+and its overlayfs file locking is slow enough that wrangler's local D1 loses a
+startup race and fails with `SQLITE_BUSY` unless that state sits on tmpfs.
+
+Browsers are not cached: the key has to track the resolved Playwright version
+exactly, a stale entry gives a confusing mismatch rather than a clean miss, and
+`--with-deps` installs the OS packages either way.
+
 ## Conventions these encode
 
 - Every action is pinned to a **commit SHA** with the version in a trailing
