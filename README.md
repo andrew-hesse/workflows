@@ -12,7 +12,7 @@ consumption mechanism:
 
 | Repo | Holds | Consumed as |
 | --- | --- | --- |
-| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@<commit> # v1` |
+| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1` |
 | `andrew-hesse/biome-config` | shared Biome config | `github:andrew-hesse/biome-config#<tag>` in `package.json` |
 | `andrew-hesse/renovate` | shared Renovate preset | `github>andrew-hesse/renovate` in `renovate.json` |
 
@@ -32,7 +32,7 @@ injection, over-broad permissions, unpinned actions.
 ```yaml
 jobs:
   workflow-lint:
-    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@0543eb81752c94e8840b7e43484edd20940b35a0 # v1
+    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1
 ```
 
 Pin the **commit**, with the tag as a trailing comment. A bare `@v1` fails
@@ -72,7 +72,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@0543eb81752c94e8840b7e43484edd20940b35a0 # v1
+    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1
     with:
       image-name: andrew-hesse/my-app
       title: my-app
@@ -99,7 +99,7 @@ jobs:
   e2e:
     permissions:
       contents: read
-    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@<commit> # v3.1
+    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1
     with:
       node-version-file: package.json
 ```
@@ -150,11 +150,20 @@ is exactly what zizmor's `ref-version-mismatch` audit fails on.
 So releases work like any other dependency:
 
 1. Change a workflow here, merge it.
-2. Tag the new commit (`v2`, or `v1.1` for a compatible change).
+2. Tag the new commit. **Bump the major only for a change a caller must react
+   to**: a removed or renamed input, a new required input, a narrower default.
+   Anything additive gets a point release (`v3.1`).
 3. Renovate raises the pin bump in each consuming repo, since it manages the
    `github-actions` datasource and updates SHA pins with their comments.
 
 Callers therefore stay on a known-good commit until a bump is reviewed, rather
 than silently inheriting whatever `v1` points at today.
+
+Step 2 is not cosmetic. Renovate reads `workflow-lint.yml@<sha> # v3.1` as
+version `v3.1` at that digest, so the tag decides which lane the bump takes: a
+point release is grouped with the non-major updates and auto-merges on the
+fortnightly schedule, while a major sits behind manual review and a 14 day
+release-age gate. Numbering a purely additive release as a new major puts a
+no-op change through the slowest path, and callers drift in the meantime.
 
 [zizmor]: https://docs.zizmor.sh/
