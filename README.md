@@ -12,7 +12,7 @@ consumption mechanism:
 
 | Repo | Holds | Consumed as |
 | --- | --- | --- |
-| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1` |
+| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@f5f8d60f7bb85aa6486cdfacad9ef96c76751323 # v3.2` |
 | `andrew-hesse/biome-config` | shared Biome config | `github:andrew-hesse/biome-config#<tag>` in `package.json` |
 | `andrew-hesse/renovate` | shared Renovate preset | `github>andrew-hesse/renovate` in `renovate.json` |
 
@@ -32,7 +32,7 @@ injection, over-broad permissions, unpinned actions.
 ```yaml
 jobs:
   workflow-lint:
-    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1
+    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@f5f8d60f7bb85aa6486cdfacad9ef96c76751323 # v3.2
 ```
 
 Pin the **commit**, with the tag as a trailing comment. A bare `@v1` fails
@@ -72,7 +72,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1
+    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@f5f8d60f7bb85aa6486cdfacad9ef96c76751323 # v3.2
     with:
       image-name: andrew-hesse/my-app
       title: my-app
@@ -98,7 +98,7 @@ jobs:
   ci:
     permissions:
       contents: read
-    uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@<commit> # v3.2
+    uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@f5f8d60f7bb85aa6486cdfacad9ef96c76751323 # v3.2
     with:
       node-version-file: package.json
 ```
@@ -130,7 +130,7 @@ jobs:
   e2e:
     permissions:
       contents: read
-    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@5d1fb395788bcce3e7531e87eb8814e7677bd399 # v3.1
+    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@f5f8d60f7bb85aa6486cdfacad9ef96c76751323 # v3.2
     with:
       node-version-file: package.json
 ```
@@ -184,7 +184,12 @@ So releases work like any other dependency:
 2. Tag the new commit. **Bump the major only for a change a caller must react
    to**: a removed or renamed input, a new required input, a narrower default.
    Anything additive gets a point release (`v3.1`).
-3. Renovate raises the pin bump in each consuming repo, since it manages the
+3. Repoint the usage examples, in this README and in each workflow's header
+   comment, at the new tag. They are what a new caller copies, so an example
+   naming an older release wires that caller to it. Resolve the commit with
+   `git ls-remote <url> 'refs/tags/vX.Y^{}'`; the annotated tag's own hash is not
+   it.
+4. Renovate raises the pin bump in each consuming repo, since it manages the
    `github-actions` datasource and updates SHA pins with their comments.
 
 Callers therefore stay on a known-good commit until a bump is reviewed, rather
