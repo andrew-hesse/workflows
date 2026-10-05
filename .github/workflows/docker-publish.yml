@@ -11,7 +11,7 @@ name: Docker publish
 #         packages: write     # REQUIRED here, not in this file: a reusable
 #                             # workflow can only narrow the caller's token,
 #                             # never widen it.
-#       uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@f5f8d60f7bb85aa6486cdfacad9ef96c76751323 # v3.2
+#       uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@3f15d375d05283ded5a321b39784310b1cc755ac # v3.3
 #       with:
 #         image-name: andrew-hesse/my-app
 #         title: my-app
