@@ -45,6 +45,11 @@ on:
         required: false
         type: string
         default: .
+      target:
+        description: "Dockerfile stage to build. Empty builds the last stage."
+        required: false
+        type: string
+        default: ""
       push:
         description: "Push the image. Set false on PRs to validate the Dockerfile without publishing."
         required: false
@@ -106,6 +111,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ inputs.context }}
+          target: ${{ inputs.target }}
           push: ${{ inputs.push }}
           platforms: ${{ inputs.platforms }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -113,8 +119,13 @@ jobs:
           # Layer cache is the only Docker caching that survives an ephemeral
           # runner: `RUN --mount=type=cache` mounts are NOT exported by cache-to
           # (docker/build-push-action#1011).
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          #
+          # Each target gets its own cache scope. Two images built from one
+          # Dockerfile would otherwise share the default `buildkit` scope, and
+          # each mode=max export would replace the other's cache. An empty
+          # target keeps the default scope, so existing callers keep their cache.
+          cache-from: type=gha,scope=${{ inputs.target && format('buildkit-{0}', inputs.target) || 'buildkit' }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.target && format('buildkit-{0}', inputs.target) || 'buildkit' }}
           # Attestations require a public repo or GitHub Advanced Security; on a
           # private repo they fail at the signing step. They would also add an
           # index-level manifest, complicating watchtower's :latest digest check.

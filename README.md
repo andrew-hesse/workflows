@@ -85,6 +85,15 @@ the caller's token, never widen it, so declaring it here is not enough.
 Set `push: false` to build without publishing, which is how a PR validates a
 Dockerfile before merge.
 
+Set `target` to build a named stage of a multi-stage Dockerfile; empty (the
+default) builds the last stage. Each target gets its own GitHub Actions cache
+scope, so two images built from one Dockerfile do not overwrite each other's
+layer cache.
+
+Inputs: `image-name`, `title`, `description` (all required), `platforms`
+(default `linux/amd64`), `context` (default `.`), `target`, `push` (default
+`true`), `timeout-minutes`.
+
 The caller keeps its own `on:` triggers, `paths:` filter and `concurrency` group.
 Those are per-repo decisions: the `paths:` filter depends on the repo's layout,
 and the `concurrency` group is what stops two merges racing to publish `:latest`.
