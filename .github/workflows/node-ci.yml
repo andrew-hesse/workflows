@@ -116,6 +116,10 @@ jobs:
       # The token goes in a user-level npmrc: pnpm refuses to expand credentials
       # read from a committed project .npmrc and fails later with a misleading
       # 401. The op:// ref travels via env, never interpolated into the shell.
+      # The token is read on a line of its own and checked: inside printf's
+      # arguments a failed or empty `op read` is ignored, an empty token is
+      # written, and the install fails later with a misleading 401. This step
+      # holds the service account token and runs nothing but op.
       - name: Authenticate to GitHub Packages
         if: inputs.npm-token-op-ref != ''
         env:
@@ -123,12 +127,17 @@ jobs:
           NPM_TOKEN_OP_REF: ${{ inputs.npm-token-op-ref }}
         run: |
           umask 077
-          printf '//npm.pkg.github.com/:_authToken=%s\n' \
-            "$(op read "$NPM_TOKEN_OP_REF")" > "$RUNNER_TEMP/npmrc"
+          token="$(op read "$NPM_TOKEN_OP_REF")"
+          [ -n "$token" ] || { echo "::error::the GitHub Packages token read from 1Password is empty"; exit 1; }
+          printf '//npm.pkg.github.com/:_authToken=%s\n' "$token" > "$RUNNER_TEMP/npmrc"
           echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/npmrc" >> "$GITHUB_ENV"
 
+      # Only the install fetches packages, so the npmrc is removed when it ends
+      # and the steps after it, which run dependency code, do not find the token.
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: |
+          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then trap 'rm -f "$NPM_CONFIG_USERCONFIG"' EXIT; fi
+          pnpm install --frozen-lockfile
 
       - name: Lint (Biome)
         run: pnpm lint
