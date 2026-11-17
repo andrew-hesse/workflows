@@ -46,8 +46,13 @@ jobs:
       # SARIF to the security tab, which needs GitHub Advanced Security and so
       # fails on a private repo. Annotations need only `contents: read`, and are
       # mutually exclusive with the SARIF path.
+      # The zizmor version is fixed by this pin. The action's `version` input defaults to
+      # `latest`, but that resolves to a lock file inside the action's own tree
+      # (support/locks/zizmor-latest.txt, hash-pinned wheels), not to whatever is newest at
+      # run time: v0.8.1 runs zizmor 1.32.0. A zizmor upgrade is therefore a bump of this pin,
+      # reviewed like any other, and its new audits show up in that PR's own CI.
       - name: Run zizmor
-        uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+        uses: zizmorcore/zizmor-action@45d7276c9ca790aabd705e31ca99c6185c3e76dd # v0.8.1
         with:
           advanced-security: false
           annotations: true

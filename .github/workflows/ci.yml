@@ -22,4 +22,4 @@ jobs:
     # ends in startup_failure before any step executes.
     permissions:
       contents: read
-    uses: ./.github/workflows/workflow-lint.yml
+    uses: $/.github/workflows/workflow-lint.yml
