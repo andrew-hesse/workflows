@@ -12,7 +12,7 @@ consumption mechanism:
 
 | Repo | Holds | Consumed as |
 | --- | --- | --- |
-| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@5d7715cc06db94795f6c739e2a9933dea4c9b562 # v3.5` |
+| `andrew-hesse/workflows` (this one) | reusable workflows | `uses: andrew-hesse/workflows/.github/workflows/<file>@bb01e9620b554c99788916ed0b0d225363a10820 # v3.6` |
 | `andrew-hesse/biome-config` | shared Biome config | `github:andrew-hesse/biome-config#<tag>` in `package.json` |
 | `andrew-hesse/renovate` | shared Renovate preset | `github>andrew-hesse/renovate` in `renovate.json` |
 
@@ -32,7 +32,7 @@ injection, over-broad permissions, unpinned actions.
 ```yaml
 jobs:
   workflow-lint:
-    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@5d7715cc06db94795f6c739e2a9933dea4c9b562 # v3.5
+    uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@bb01e9620b554c99788916ed0b0d225363a10820 # v3.6
 ```
 
 Pin the **commit**, with the tag as a trailing comment. A bare `@v1` fails
@@ -72,7 +72,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@5d7715cc06db94795f6c739e2a9933dea4c9b562 # v3.5
+    uses: andrew-hesse/workflows/.github/workflows/docker-publish.yml@bb01e9620b554c99788916ed0b0d225363a10820 # v3.6
     with:
       image-name: andrew-hesse/my-app
       title: my-app
@@ -107,7 +107,7 @@ jobs:
   ci:
     permissions:
       contents: read
-    uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@5d7715cc06db94795f6c739e2a9933dea4c9b562 # v3.5
+    uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@bb01e9620b554c99788916ed0b0d225363a10820 # v3.6
     with:
       node-version-file: package.json
 ```
@@ -139,7 +139,7 @@ jobs:
   e2e:
     permissions:
       contents: read
-    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@5d7715cc06db94795f6c739e2a9933dea4c9b562 # v3.5
+    uses: andrew-hesse/workflows/.github/workflows/e2e.yml@bb01e9620b554c99788916ed0b0d225363a10820 # v3.6
     with:
       node-version-file: package.json
 ```
