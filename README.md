@@ -174,10 +174,10 @@ App installation registers runners on box passes:
 
 ```yaml
     with:
-      runs-on: '["self-hosted", "box"]'
+      runs-on: '["box"]'
 ```
 
-Each job there gets a fresh container with 4 cores and 5 GiB, no Docker daemon
+Each job there gets a fresh container with 8 cores and 6 GiB, no Docker daemon
 and no route to the home LAN (`ahesse/docs` `github/self-hosted-runner.md`).
 `docker-publish.yml` has no such input: it builds with Docker, so it stays on
 GitHub's runners. Never pass it from a public repo: anyone's pull request would
