@@ -40,7 +40,7 @@ on:
     inputs:
       runs-on:
         description: >-
-          Runner labels as a JSON list, e.g. '["self-hosted", "box"]' for the
+          Runner labels as a JSON list, e.g. '["box"]' for the
           self-hosted runner on box (ahesse/docs github/self-hosted-runner.md).
           JSON because a reusable workflow's inputs are only strings, numbers
           and booleans, and runs-on needs a list to match several labels.
