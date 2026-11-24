@@ -40,7 +40,7 @@ zizmor's own `unpinned-uses` audit, so the linter rejects the line that calls it
 Resolve the commit an annotated tag points at with
 `git ls-remote <url> 'refs/tags/v1^{}'`; the tag object's own hash is not it.
 
-Inputs: `persona` (`regular`, `pedantic`, `auditor`), `min-severity`.
+Inputs: `persona` (`regular`, `pedantic`, `auditor`), `min-severity`, `runs-on`.
 
 It runs in annotation mode, not SARIF. The action defaults to uploading SARIF to
 the security tab, which requires GitHub Advanced Security and therefore fails on
@@ -117,7 +117,7 @@ standardised (see `CI.md` in `ahesse/docs`): `lint`, `typecheck`, `test` and
 `build` mean the same thing in every repo.
 
 Inputs: `node-version`, `node-version-file`, `test-script` (default `test`),
-`run-build`, `timeout-minutes`, `npm-token-op-ref`.
+`run-build`, `timeout-minutes`, `npm-token-op-ref`, `runs-on`.
 
 Point `test-script` at a stricter script where the repo has one. A repo whose
 gate was a coverage run with enforced floors would otherwise have to re-run its
@@ -151,7 +151,7 @@ D1 migration pass needs no extra inputs here.
 
 Inputs: `node-version`, `node-version-file`, `browsers` (default `chromium`,
 empty string for all), `test-script` (default `test:e2e`), `timeout-minutes`,
-`artifact-name`, `retention-days`, `npm-token-op-ref`.
+`artifact-name`, `retention-days`, `npm-token-op-ref`, `runs-on`.
 
 It runs on `ubuntu-latest`, **not** in the `mcr.microsoft.com/playwright`
 container. What the container buys is a preinstalled browser set, and that
@@ -165,6 +165,23 @@ startup race and fails with `SQLITE_BUSY` unless that state sits on tmpfs.
 Browsers are not cached: the key has to track the resolved Playwright version
 exactly, a stale entry gives a confusing mismatch rather than a clean miss, and
 `--with-deps` installs the OS packages either way.
+
+### Running on the box runner
+
+`node-ci.yml`, `workflow-lint.yml` and `e2e.yml` take `runs-on`, a JSON list
+of runner labels (default `["ubuntu-latest"]`). A private repo whose GitHub
+App installation registers runners on box passes:
+
+```yaml
+    with:
+      runs-on: '["self-hosted", "box"]'
+```
+
+Each job there gets a fresh container with 4 cores and 5 GiB, no Docker daemon
+and no route to the home LAN (`ahesse/docs` `github/self-hosted-runner.md`).
+`docker-publish.yml` has no such input: it builds with Docker, so it stays on
+GitHub's runners. Never pass it from a public repo: anyone's pull request would
+run on box.
 
 ## Conventions these encode
 

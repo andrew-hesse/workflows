@@ -20,6 +20,15 @@ name: Node CI
 on:
   workflow_call:
     inputs:
+      runs-on:
+        description: >-
+          Runner labels as a JSON list, e.g. '["self-hosted", "box"]' for the
+          self-hosted runner on box (ahesse/docs github/self-hosted-runner.md).
+          JSON because a reusable workflow's inputs are only strings, numbers
+          and booleans, and runs-on needs a list to match several labels.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
       node-version:
         description: "Node major to test against. Match the repo's engines.node. Ignored if node-version-file is set."
         required: false
@@ -72,7 +81,7 @@ permissions: {}
 jobs:
   ci:
     name: Lint, typecheck, test, build
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runs-on) }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: read

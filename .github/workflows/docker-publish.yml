@@ -69,6 +69,8 @@ env:
 jobs:
   build:
     name: Build and push
+    # Hosted only: it builds with Docker, and the box runner gives jobs no
+    # Docker daemon (ahesse/docs github/self-hosted-runner.md).
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
