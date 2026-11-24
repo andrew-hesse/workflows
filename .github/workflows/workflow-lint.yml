@@ -51,6 +51,140 @@ jobs:
           # step can read it. Nothing here pushes, so drop it.
           persist-credentials: false
 
+      # Package-store caches (setup-node's `cache:`, pnpm/action-setup's
+      # `cache: true`, actions/cache over the pnpm store) cost more than they
+      # save on these repos: most restores miss, each miss uploads the whole
+      # store, and on box even a hit loses to a cold install. Measured in
+      # ahesse/docs github/self-hosted-runner.md. Line-based rather than a YAML
+      # parser, because box's job image has no PyYAML; it reads the steps
+      # of every workflow and local composite action, and checks itself on a
+      # known-bad sample first so it cannot pass by matching nothing.
+      - name: No package-store cache
+        shell: python3 {0}
+        run: |
+          import pathlib
+          import re
+          import sys
+
+          KEY = re.compile(r"^\s*(?:-\s+)?([A-Za-z0-9_-]+):\s*(.*?)\s*(?:\s#.*)?$")
+          OFF = {"", "''", '""', "false", "'false'", '"false"'}
+
+
+          def steps(text):
+              """Split a workflow into list items: (first line, {key: [(line, value)]}, body)."""
+              out, cur = [], None
+              for n, raw in enumerate(text.splitlines(), 1):
+                  body = raw.lstrip()
+                  if not body or body.startswith("#"):
+                      continue
+                  indent = len(raw) - len(body)
+                  if cur is not None and indent <= cur["indent"] and not body.startswith("- "):
+                      cur = None
+                  if body.startswith("- ") and (cur is None or indent <= cur["indent"]):
+                      cur = {"indent": indent, "line": n, "keys": {}, "body": []}
+                      out.append(cur)
+                  if cur is None:
+                      continue
+                  cur["body"].append((indent, raw))
+                  m = KEY.match(raw)
+                  if m:
+                      cur["keys"].setdefault(m.group(1), []).append((n, m.group(2)))
+              return out
+
+
+          def cache_path(step):
+              """The path input of a cache step, block scalar included, lowercased."""
+              lines, within = [], None
+              for indent, raw in step["body"]:
+                  if within is not None:
+                      if indent <= within:
+                          break
+                      lines.append(raw)
+                      continue
+                  m = KEY.match(raw)
+                  if m and m.group(1) == "path":
+                      lines.append(m.group(2))
+                      within = indent
+              return "\n".join(lines).lower()
+
+
+          def findings(text):
+              """(line, message) for each step that caches a package store."""
+              found = []
+              for s in steps(text):
+                  uses = s["keys"].get("uses", [(0, "")])[0][1].strip("'\"").split("@")[0]
+                  cache = s["keys"].get("cache", [])
+                  if uses == "actions/setup-node":
+                      found += [(n, "setup-node caches the package store (cache: %s)" % v)
+                                for n, v in cache if v not in OFF]
+                  elif uses == "pnpm/action-setup":
+                      found += [(n, "pnpm/action-setup caches the pnpm store (cache: %s)" % v)
+                                for n, v in cache if v not in OFF]
+                  elif re.fullmatch(r"actions/cache(/restore|/save)?", uses) and "pnpm" in cache_path(s):
+                      found.append((s["line"], "%s caches the pnpm store" % uses))
+              return found
+
+
+          # A check that finds nothing must prove it can find something: run it on a
+          # known-bad sample first. Built line by line so this file does not itself
+          # contain the shapes it looks for.
+          bad = "\n".join([
+              "    steps:",
+              "      - uses: actions/setup-node@x",
+              "        with:",
+              "          node-version: 24",
+              "          cache" + ": pnpm",
+              "      - name: pnpm",
+              "        uses: pnpm/action-setup@x",
+              "        with:",
+              "          cache" + ": true",
+              "      - uses: actions/cache/restore@x",
+              "        with:",
+              "          path: ~/.local/share/" + "pnpm/store",
+              "          key: k",
+              "      - uses: actions/setup-node@x",
+              "        with:",
+              "          package-manager-cache: false",
+              "      - uses: pnpm/action-setup@x",
+              "        with:",
+              "          cache" + ": false",
+              "      - uses: actions/cache@x",
+              "        with:",
+              "          path: node_modules/.astro",
+              "          key: astro-${{ hashFiles('" + "pnpm-lock.yaml') }}",
+              "      - uses: actions/cache@x",
+              "        with:",
+              "          path: |",
+              "            ~/.cache/x",
+              "            ~/.local/share/" + "pnpm/store",
+              "          key: k",
+          ])
+          got = [n for n, _ in findings(bad)]
+          if got != [5, 9, 10, 24]:
+              print("::error::the package-store cache check missed its own sample (got lines %s, want [5, 9, 10, 24])" % got)
+              sys.exit(1)
+
+          files = sorted(p for pat in (".github/workflows/*.yml", ".github/workflows/*.yaml",
+                                       ".github/actions/**/action.yml", ".github/actions/**/action.yaml")
+                         for p in pathlib.Path(".").glob(pat))
+          failed = False
+          for p in files:
+              try:
+                  text = p.read_text(encoding="utf-8")
+              except (OSError, UnicodeDecodeError) as e:
+                  print("::error file=%s::could not read: %s" % (p, e))
+                  failed = True
+                  continue
+              for n, msg in findings(text):
+                  print("::error file=%s,line=%d::%s. Package-store caches cost more than they "
+                        "save here; see ahesse/docs github/self-hosted-runner.md." % (p, n, msg))
+                  failed = True
+          print("workflow files examined: %d" % len(files))
+          if not files:
+              print("::error::no workflow files found under .github/; was the repository checked out?")
+              failed = True
+          sys.exit(1 if failed else 0)
+
       # advanced-security: false is required. The action defaults to uploading
       # SARIF to the security tab, which needs GitHub Advanced Security and so
       # fails on a private repo. Annotations need only `contents: read`, and are

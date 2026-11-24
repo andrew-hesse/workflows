@@ -42,6 +42,14 @@ Resolve the commit an annotated tag points at with
 
 Inputs: `persona` (`regular`, `pedantic`, `auditor`), `min-severity`, `runs-on`.
 
+Before zizmor runs, a `No package-store cache` step fails any workflow or local
+composite action that caches a package store: setup-node's `cache:` input,
+pnpm/action-setup's `cache: true`, or `actions/cache` over the pnpm store. On
+these repos such a cache costs more than it saves (see `node-ci.yml` below). It
+prints how many files it read, fails when it read none, and checks itself on a
+known-bad sample before trusting a clean result. Build-output caches, such as an
+Astro image cache, are not package stores and pass.
+
 It runs in annotation mode, not SARIF. The action defaults to uploading SARIF to
 the security tab, which requires GitHub Advanced Security and therefore fails on
 a private repo.
@@ -118,6 +126,13 @@ standardised (see `CI.md` in `ahesse/docs`): `lint`, `typecheck`, `test` and
 
 Inputs: `node-version`, `node-version-file`, `test-script` (default `test`),
 `run-build`, `timeout-minutes`, `npm-token-op-ref`, `runs-on`.
+
+It does not cache the pnpm store, and neither does `e2e.yml`. setup-node keys
+that cache on the lockfile hash with no fallback, and a pull request's cache
+entries are visible only to that pull request, so most restores miss and each
+miss uploads the whole store (about 200 MB) after the job. Every job installs
+from the registry instead, which is what a miss does anyway. The measurements
+are in `ahesse/docs` `github/self-hosted-runner.md`.
 
 Point `test-script` at a stricter script where the repo has one. A repo whose
 gate was a coverage run with enforced floors would otherwise have to re-run its
