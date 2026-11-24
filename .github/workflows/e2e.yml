@@ -6,7 +6,7 @@ name: E2E
 #     e2e:
 #       permissions:
 #         contents: read
-#       uses: andrew-hesse/workflows/.github/workflows/e2e.yml@d8297d42cd9ed59ac25821b41076fa97b22df139 # v3.7
+#       uses: andrew-hesse/workflows/.github/workflows/e2e.yml@9ea273620d28a73a11aac80941d33c86f4adbf7a # v3.8
 #       with:
 #         node-version-file: package.json
 #
