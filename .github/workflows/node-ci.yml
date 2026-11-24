@@ -5,7 +5,7 @@ name: Node CI
 #
 #   jobs:
 #     ci:
-#       uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@9ea273620d28a73a11aac80941d33c86f4adbf7a # v3.8
+#       uses: andrew-hesse/workflows/.github/workflows/node-ci.yml@1af5db3082910f24c257ca8994df316f8bd3ed40 # v3.9
 #
 # This only works because the script vocabulary is standardised (see CI.md in
 # ahesse/docs): every repo exposes lint, typecheck, test and build meaning the
