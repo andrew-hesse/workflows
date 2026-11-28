@@ -125,7 +125,23 @@ standardised (see `CI.md` in `ahesse/docs`): `lint`, `typecheck`, `test` and
 `build` mean the same thing in every repo.
 
 Inputs: `node-version`, `node-version-file`, `test-script` (default `test`),
-`run-build`, `timeout-minutes`, `npm-token-op-ref`, `runs-on`.
+`run-build`, `timeout-minutes`, `require-worker-observability` (default `true`),
+`npm-token-op-ref`, `runs-on`.
+
+Before lint, a `Worker observability` step fails the job unless every
+`wrangler.json`, `wrangler.jsonc` or `wrangler.toml` at the repository root
+keeps Workers Logs on, at the top level and in each `env.*` block
+(`ahesse/docs` `cloudflare/observability.md`). A repo with no Wrangler config
+passes. The step prints each environment it read and the total, and it fails
+if it read none.
+
+It reads the config through the repo's own Wrangler, `unstable_readConfig` and
+`experimental_readRawConfig`, so JSONC, TOML and environment inheritance resolve
+exactly as at deploy time. Those exports carry no stability promise. When a
+Wrangler upgrade renames one, the step fails, naming the Wrangler version,
+instead of passing without checking. Fix the step here rather than turning it
+off in the caller. Set `require-worker-observability: false` only for a Worker
+the owner has exempted, with the reason in a comment beside it.
 
 It does not cache the pnpm store, and neither does `e2e.yml`. setup-node keys
 that cache on the lockfile hash with no fallback, and a pull request's cache
