@@ -62,6 +62,15 @@ on:
         required: false
         type: number
         default: 10
+      require-worker-observability:
+        description: >-
+          Fail unless every Wrangler config at the repository root keeps Workers
+          Logs on in every environment. A repo with no Wrangler config passes.
+          Turn it off only for a Worker the owner has exempted, and say why in
+          the caller.
+        required: false
+        type: boolean
+        default: true
       npm-token-op-ref:
         description: >-
           op:// reference to a read:packages token, for repos installing private
@@ -158,6 +167,63 @@ jobs:
         run: |
           if [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then trap 'rm -f "$NPM_CONFIG_USERCONFIG"' EXIT; fi
           pnpm install --frozen-lockfile
+
+      # Workers Logs must stay on (andrew-hesse/docs cloudflare/observability.md).
+      # It runs after the install because it reads the config with the repo's own
+      # Wrangler, and before lint so a missing block is the first failure shown.
+      - name: Worker observability
+        if: inputs.require-worker-observability
+        run: |
+          node --input-type=module <<'CHECK'
+            // Fails unless every Wrangler config at the repo root keeps Workers Logs on, in
+            // every environment (andrew-hesse/docs cloudflare/observability.md). It reads
+            // the config with the repo's own Wrangler so JSONC, TOML and env inheritance
+            // resolve exactly as at deploy time. Those readers are Wrangler's unstable and
+            // experimental exports: when an upgrade renames one, this fails and names the
+            // version instead of passing without checking anything.
+            import { existsSync } from 'node:fs'
+            import { createRequire } from 'node:module'
+            import { resolve } from 'node:path'
+
+            const fail = (message) => {
+              console.error(`::error::${message}`)
+              process.exit(1)
+            }
+            const configs = ['wrangler.json', 'wrangler.jsonc', 'wrangler.toml'].filter((f) => existsSync(f))
+            if (configs.length === 0) {
+              console.log('No Wrangler config at the repository root; nothing to check.')
+              process.exit(0)
+            }
+            let wrangler
+            let version
+            try {
+              wrangler = await import(createRequire(resolve('package.json')).resolve('wrangler'))
+              version = createRequire(resolve('package.json'))('wrangler/package.json').version
+            } catch {
+              fail(`${configs.join(', ')} found but wrangler is not installed; add it to devDependencies.`)
+            }
+            for (const name of ['unstable_readConfig', 'experimental_readRawConfig']) {
+              if (typeof wrangler[name] !== 'function')
+                fail(`wrangler ${version} no longer exports ${name}; update the observability check in andrew-hesse/workflows.`)
+            }
+            const off = []
+            let checked = 0
+            for (const config of configs) {
+              const envs = Object.keys(wrangler.experimental_readRawConfig({ config }).rawConfig?.env ?? {})
+              for (const env of [undefined, ...envs]) {
+                const { name, observability: o } = wrangler.unstable_readConfig({ config, env })
+                // logs.enabled, when set, decides; otherwise the top-level switch does.
+                const on = (o?.logs?.enabled ?? o?.enabled) === true
+                checked++
+                console.log(`${config} ${env ? `env.${env}` : '(top level)'} ${name}: Workers Logs ${on ? 'on' : 'OFF'}`)
+                if (!on) off.push(`${config} ${env ? `env.${env}` : 'top level'}`)
+              }
+            }
+            console.log(`Checked ${checked} environment(s) in ${configs.length} config(s) with wrangler ${version}.`)
+            if (checked === 0) fail('Read no environment from the Wrangler config.')
+            if (off.length)
+              fail(`Workers Logs is off in ${off.join(', ')}. Add "observability": { "enabled": true } (andrew-hesse/docs cloudflare/observability.md).`)
+          CHECK
 
       - name: Lint (Biome)
         run: pnpm lint
