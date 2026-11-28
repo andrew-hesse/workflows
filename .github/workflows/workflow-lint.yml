@@ -6,7 +6,7 @@ name: Workflow lint
 #
 #   jobs:
 #     workflow-lint:
-#       uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@1af5db3082910f24c257ca8994df316f8bd3ed40 # v3.9
+#       uses: andrew-hesse/workflows/.github/workflows/workflow-lint.yml@4a58f391cc16dd9899abe4c6b9f826dea412e822 # v3.10
 #
 # Reusable workflows must live directly in .github/workflows/ of this repo;
 # GitHub does not support subdirectories there.
